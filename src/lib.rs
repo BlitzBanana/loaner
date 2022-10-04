@@ -61,9 +61,7 @@ impl LoanBuilder {
     }
 
     pub fn build(self) -> Result<Loan, LoanBuilderError> {
-        let principal = self
-            .principal
-            .ok_or(LoanBuilderError::MissingPrincipal)?;
+        let principal = self.principal.ok_or(LoanBuilderError::MissingPrincipal)?;
         let annual_rate = self
             .annual_rate
             .ok_or(LoanBuilderError::MissingAnnualRate)?;
@@ -71,30 +69,37 @@ impl LoanBuilder {
             .duration_in_months
             .ok_or(LoanBuilderError::MissingDuration)?;
 
-        let i = annual_rate / 12.;
-        let p = principal;
-        let n = duration_in_months as f64;
+        let payments = {
+            let mut payments = Vec::with_capacity(duration_in_months);
+            let mut remaining_principal = principal;
 
-        let monthly_payment = p * (i * (1. + i).powf(n) / ((1. + i).powf(n) - 1.));
-        let mut payments = Vec::with_capacity(duration_in_months);
-        let mut remaining_principal = principal;
+            let monthly_payment_amount = {
+                let i = annual_rate / 12.;
+                let p = principal;
+                let n = duration_in_months as f64;
 
-        for month_index in 0..duration_in_months {
-            let start_principal = remaining_principal;
-            let interests_part = annual_rate / 12. * remaining_principal;
-            let principal_part = monthly_payment - interests_part;
-            let end_principal = remaining_principal - principal_part;
+                p * (i * (1. + i).powf(n) / ((1. + i).powf(n) - 1.))
+            };
 
-            payments.push(Payment {
-                month_index,
-                start_principal,
-                interests_part,
-                principal_part,
-                amount: principal_part + interests_part,
-            });
+            for month_index in 0..duration_in_months {
+                let start_principal = remaining_principal;
+                let interests_part = annual_rate / 12. * remaining_principal;
+                let principal_part = monthly_payment_amount - interests_part;
+                let end_principal = remaining_principal - principal_part;
 
-            remaining_principal = end_principal;
-        }
+                payments.push(Payment {
+                    month_index,
+                    start_principal,
+                    interests_part,
+                    principal_part,
+                    amount: principal_part + interests_part,
+                });
+
+                remaining_principal = end_principal;
+            }
+
+            payments
+        };
 
         let total_paid_interests = payments
             .iter()
